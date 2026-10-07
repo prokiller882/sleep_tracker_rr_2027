@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1020" />
+  <title>Трекер сна</title>
+  <link rel="stylesheet" href="./css/main.css">
+
+</head>
+
+<body>
+
+  <div class="app">
+
+    <header class="head">
+      <h1>Трекер сна</h1>
+      <p>Отмечайте сон и оценивайте самочувствие</p>
+    </header>
+
+    <!-- Быстрые действия -->
+    <section class="card quick">
+      <div class="quick-status">
+        <div class="big-time" id="bigTime">--:--</div>
+        <div class="muted" id="bigLabel">Сейчас</div>
+      </div>
+      <button class="btn primary" id="btnSleep">😴 Отметить отход ко сну</button>
+      <button class="btn wake" id="btnWake" hidden>☀️ Отметить пробуждение</button>
+      <button class="link" id="btnReset" hidden>Сбросить</button>
+    </section>
+
+    <!-- Статистика -->
+    <section class="stats">
+      <div class="stat">
+        <div class="stat-val" id="statCount">0</div>
+        <div class="stat-key">записей</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val" id="statDur">—</div>
+        <div class="stat-key">средний сон</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val" id="statMood">—</div>
+        <div class="stat-key">самочувствие</div>
+      </div>
+    </section>
+
+    <!-- График сна -->
+    <section class="card chart-card">
+      <div class="section-head">
+        <h2>Сон за 7 дней</h2>
+        <span class="chart-legend">часов</span>
+      </div>
+      <div class="chart" id="chart"></div>
+    </section>
+
+    <!-- История -->
+    <section class="history">
+      <div class="section-head">
+        <h2>История</h2>
+        <button class="link" id="btnAdd">+ Добавить вручную</button>
+      </div>
+      <ul id="list"></ul>
+      <p class="empty" id="empty">Пока нет записей.<br>Отметьте первый сон 🌙</p>
+    </section>
+
+  </div>
+
+  <!-- Модальное окно -->
+  <div class="modal-backdrop" id="modal">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Запись сна">
+      <h2>Запись сна</h2>
+
+      <label class="field">
+        <span>Отход ко сну</span>
+        <input type="datetime-local" id="fBed" />
+      </label>
+
+      <label class="field">
+        <span>Пробуждение</span>
+        <input type="datetime-local" id="fWake" />
+      </label>
+
+      <div class="field">
+        <span style="text-align:center">Самочувствие</span>
+        <div class="stars" id="fQuality">
+          <button type="button" data-v="1">★</button>
+          <button type="button" data-v="2">★</button>
+          <button type="button" data-v="3">★</button>
+          <button type="button" data-v="4">★</button>
+          <button type="button" data-v="5">★</button>
+        </div>
+        <div class="quality-label" id="qualityLabel">😐 Нормально</div>
+      </div>
+
+      <label class="field">
+        <span>Заметка (необязательно)</span>
+        <textarea id="fNote" rows="2" placeholder="Снились сны, пил кофе вечером…"></textarea>
+      </label>
+
+      <div class="modal-actions">
+        <button class="btn ghost" id="btnCancel">Отмена</button>
+        <button class="btn primary" id="btnSave">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="./js/script.js"></script>
+</body>
+
+</html>
