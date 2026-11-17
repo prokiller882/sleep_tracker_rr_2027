@@ -24,9 +24,32 @@
   const CHART_DAYS  = 7;
 
   /* ================== GOOGLE AUTH ================== */
+  const TOKEN_KEY = 'sleep-tracker-token';
   let tokenClient = null;
   let accessToken = null;
   let authResolve = null;
+
+  function storeToken(token, expiresIn) {
+    try {
+      const exp = Date.now() + ((Number(expiresIn) || 3600) * 1000) - 60000;
+      localStorage.setItem(TOKEN_KEY, JSON.stringify({ token: token, exp: exp }));
+    } catch (e) { /* ignore */ }
+  }
+
+  function loadStoredToken() {
+    try {
+      const raw = localStorage.getItem(TOKEN_KEY);
+      if (!raw) return null;
+      const obj = JSON.parse(raw);
+      if (obj && obj.token && obj.exp && Date.now() < obj.exp) return obj.token;
+      localStorage.removeItem(TOKEN_KEY);
+    } catch (e) { /* ignore */ }
+    return null;
+  }
+
+  function clearStoredToken() {
+    try { localStorage.removeItem(TOKEN_KEY); } catch (e) { /* ignore */ }
+  }
 
   function initAuth() {
     tokenClient = google.accounts.oauth2.initTokenClient({
@@ -40,23 +63,41 @@
           return;
         }
         accessToken = resp.access_token;
+        storeToken(resp.access_token, resp.expires_in);
         if (authResolve) { authResolve.resolve(accessToken); authResolve = null; }
       }
     });
   }
 
-  function requestToken() {
+  function requestToken(silent) {
     if (accessToken) return Promise.resolve(accessToken);
+    if (!tokenClient) return Promise.reject(new Error('Сервис входа Google ещё не загрузился'));
     return new Promise((resolve, reject) => {
       authResolve = { resolve, reject };
-      tokenClient.requestAccessToken();
+      tokenClient.requestAccessToken(silent ? { prompt: '' } : {});
     });
   }
 
+  // Тихий автовход: сохранённый токен или бесшумный запрос к Google.
+  function tryAutoLogin() {
+    const stored = loadStoredToken();
+    if (stored) {
+      accessToken = stored;
+      hideAuth();
+      syncFromServer(false);
+      return;
+    }
+    requestToken(true)
+      .then(() => { hideAuth(); syncFromServer(false); })
+      .catch(() => { showAuth(); });
+  }
+
   // Ждём, пока загрузится скрипт Google Identity Services.
-  function ensureGsi(cb) {
+  function ensureGsi(cb, attempts) {
+    attempts = attempts || 0;
     if (window.google && google.accounts && google.accounts.oauth2) { cb(); return; }
-    setTimeout(() => ensureGsi(cb), 100);
+    if (attempts > 50) { showAuth(); return; }
+    setTimeout(() => ensureGsi(cb, attempts + 1), 100);
   }
 
   /* ================== СЕРВЕРНЫЙ API ================== */
@@ -73,6 +114,7 @@
 
     if (res.status === 401 || res.status === 403) {
       accessToken = null;
+      clearStoredToken();
       showAuth();
       throw new Error('Требуется повторный вход');
     }
@@ -543,7 +585,7 @@
   /* ================== СОБЫТИЯ ================== */
   el.btnLogin.addEventListener('click', () => {
     el.authError.textContent = '';
-    requestToken()
+    requestToken(false)
       .then(() => {
         hideAuth();
         syncFromServer(false);
@@ -625,7 +667,10 @@
   /* ================== СТАРТ ================== */
   loadCache();
   render();
-  ensureGsi(initAuth);
+  ensureGsi(() => {
+    initAuth();
+    tryAutoLogin();
+  });
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});

@@ -1,5 +1,6 @@
-/* ТРЕКЕР СНА — service worker (офлайн-кэш оболочки приложения) */
-const CACHE = 'sleep-tracker-v1';
+/* ТРЕКЕР СНА — service worker
+   Network-first: когда онлайн — всегда свежие файлы, офлайн — из кэша. */
+const CACHE = 'sleep-tracker-v2';
 const ASSETS = [
   '.',
   'index.html',
@@ -29,18 +30,17 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  // Кэшируем только GET-запросы оболочки; запросы к API (POST) пропускаем в сеть.
+  // Только GET-запросы оболочки своего origin; запросы к API (POST) не трогаем.
   if (e.request.method !== 'GET') return;
   if (!e.request.url.startsWith(self.location.origin)) return;
 
   e.respondWith(
-    caches.match(e.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(e.request).then((res) => {
+    fetch(e.request)
+      .then((res) => {
         const copy = res.clone();
         caches.open(CACHE).then((c) => c.put(e.request, copy));
         return res;
-      });
-    })
+      })
+      .catch(() => caches.match(e.request))
   );
 });
