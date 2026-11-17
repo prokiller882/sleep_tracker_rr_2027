@@ -35,6 +35,7 @@
       callback: (resp) => {
         if (resp && resp.error !== undefined) {
           const err = new Error(resp.error_description || resp.error || 'Ошибка входа');
+          err.code = resp.error;
           if (authResolve) { authResolve.reject(err); authResolve = null; }
           return;
         }
@@ -89,6 +90,9 @@
     addEntry(bed, wake, quality, note) {
       return api('add', { bed, wake, quality, note }).then((d) => d.entry);
     },
+    updateEntry(id, bed, wake, quality, note) {
+      return api('update', { id, bed, wake, quality, note }).then((d) => d.entry);
+    },
     deleteEntry(id) {
       return api('delete', { id });
     }
@@ -104,6 +108,7 @@
   let editingQuality = 3;
   let isLoading = false;
   let showAll = false;
+  let editingId = null;
 
   /* ================== DOM ================== */
   const $ = (sel) => document.querySelector(sel);
@@ -125,6 +130,7 @@
     btnAdd:     $('#btnAdd'),
     btnMore:    $('#btnMore'),
     modal:      $('#modal'),
+    modalTitle: $('#modalTitle'),
     fBed:       $('#fBed'),
     fWake:      $('#fWake'),
     fQuality:   $('#fQuality'),
@@ -371,7 +377,12 @@
         <li class="entry">
           <div class="entry-head">
             <span class="entry-date">${fmtDate(e.wake)}</span>
-            <button class="del" data-id="${esc(e.id)}" aria-label="Удалить">✕</button>
+            <span class="entry-actions">
+              <button class="edit" data-id="${esc(e.id)}" aria-label="Изменить">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 20h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+              </button>
+              <button class="del" data-id="${esc(e.id)}" aria-label="Удалить">✕</button>
+            </span>
           </div>
           <div class="entry-times">
             <span class="t">${fmtTime(e.bed)}</span>
@@ -416,13 +427,24 @@
   function openModal(opts) {
     opts = opts || {};
     const now = new Date();
-    const bedDate = opts.bed ? new Date(opts.bed) : new Date(now.getTime() - 8 * 3600 * 1000);
-    const wakeDate = opts.wake ? new Date(opts.wake) : now;
 
-    el.fBed.value = toInputValue(bedDate);
-    el.fWake.value = toInputValue(wakeDate);
-    el.fNote.value = '';
-    setQuality(3);
+    if (opts.entry) {
+      editingId = opts.entry.id;
+      el.fBed.value = toInputValue(opts.entry.bed);
+      el.fWake.value = toInputValue(opts.entry.wake);
+      el.fNote.value = opts.entry.note || '';
+      setQuality(Number(opts.entry.quality) || 3);
+      el.modalTitle.textContent = 'Изменить запись';
+    } else {
+      editingId = null;
+      const bedDate = opts.bed ? new Date(opts.bed) : new Date(now.getTime() - 8 * 3600 * 1000);
+      const wakeDate = opts.wake ? new Date(opts.wake) : now;
+      el.fBed.value = toInputValue(bedDate);
+      el.fWake.value = toInputValue(wakeDate);
+      el.fNote.value = '';
+      setQuality(3);
+      el.modalTitle.textContent = 'Запись сна';
+    }
 
     el.modal.classList.add('open');
     document.body.style.overflow = 'hidden';
@@ -464,15 +486,27 @@
     el.btnSave.textContent = 'Сохранение…';
 
     try {
-      const entry = await server.addEntry(
-        bedDate.toISOString(),
-        wakeDate.toISOString(),
-        editingQuality,
-        el.fNote.value.trim()
-      );
+      if (editingId) {
+        const entry = await server.updateEntry(
+          editingId,
+          bedDate.toISOString(),
+          wakeDate.toISOString(),
+          editingQuality,
+          el.fNote.value.trim()
+        );
+        const idx = state.entries.findIndex((x) => x.id === editingId);
+        if (idx !== -1) state.entries[idx] = entry;
+      } else {
+        const entry = await server.addEntry(
+          bedDate.toISOString(),
+          wakeDate.toISOString(),
+          editingQuality,
+          el.fNote.value.trim()
+        );
+        state.entries.push(entry);
+        state.pending = null;
+      }
 
-      state.entries.push(entry);
-      state.pending = null;
       saveCache();
       render();
       closeModal();
@@ -515,7 +549,12 @@
         syncFromServer(false);
       })
       .catch((err) => {
-        el.authError.textContent = 'Не удалось войти: ' + (err && err.message ? err.message : err);
+        const msg = (err && err.message) ? err.message : String(err);
+        if ((err && err.code === 'access_denied') || /access_denied/i.test(msg)) {
+          el.authError.textContent = 'Доступ ограничен. Приложение доступно только приглашённым пользователям — обратитесь к владельцу.';
+        } else {
+          el.authError.textContent = 'Не удалось войти: ' + msg;
+        }
       });
   });
 
@@ -552,9 +591,14 @@
   });
 
   el.list.addEventListener('click', (e) => {
-    const btn = e.target.closest('.del');
-    if (!btn) return;
-    deleteEntry(btn.dataset.id);
+    const delBtn = e.target.closest('.del');
+    if (delBtn) { deleteEntry(delBtn.dataset.id); return; }
+
+    const editBtn = e.target.closest('.edit');
+    if (editBtn) {
+      const entry = state.entries.find((x) => x.id === editBtn.dataset.id);
+      if (entry) openModal({ entry: entry });
+    }
   });
 
   el.modal.addEventListener('click', (e) => {

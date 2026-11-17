@@ -45,6 +45,10 @@ function doPost(e) {
       const entry = addEntry(payload.bed, payload.wake, payload.quality, payload.note);
       return json_({ result: 'success', entry: entry });
     }
+    if (action === 'update') {
+      const entry = updateEntry(payload.id, payload.bed, payload.wake, payload.quality, payload.note);
+      return json_({ result: 'success', entry: entry });
+    }
     if (action === 'delete') {
       deleteEntry(payload.id);
       return json_({ result: 'success' });
@@ -132,6 +136,32 @@ function addEntry(bed, wake, quality, note) {
   appendEntry_(getSheet_(), id, bedIso, wakeIso, q, text);
 
   return { id: id, bed: bedIso, wake: wakeIso, quality: q, note: text };
+}
+
+function updateEntry(id, bed, wake, quality, note) {
+  const key = String(id == null ? '' : id).trim();
+  if (!key) throw new Error('Нет id записи');
+
+  const bedIso = validDate_(bed);
+  const wakeIso = validDate_(wake);
+  const q = validQuality_(quality);
+  const text = noteText_(note);
+
+  const sheet = getSheet_();
+  const last = sheet.getLastRow();
+  if (last < 2) throw new Error('Запись не найдена');
+
+  const ids = sheet.getRange(2, 1, last - 1, 1).getValues().map((r) => String(r[0]));
+  const idx = ids.indexOf(key);
+  if (idx === -1) throw new Error('Запись не найдена');
+
+  const row = idx + 2;
+  sheet.getRange(row, 2, 1, 3).setValues([[bedIso, wakeIso, q]]);
+  const cell = sheet.getRange(row, 5);
+  cell.setNumberFormat('@');
+  cell.setValue(text);
+
+  return { id: key, bed: bedIso, wake: wakeIso, quality: q, note: text };
 }
 
 function deleteEntry(id) {

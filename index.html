@@ -30,6 +30,7 @@
       <h2>Трекер сна</h2>
       <p>Войдите в Google-аккаунт. Данные сохраняются в вашу личную таблицу — доступ к ним есть только у вас.</p>
       <button class="btn primary" id="btnLogin">Войти через Google</button>
+      <p class="auth-note">Доступ только для приглашённых пользователей.</p>
       <p class="auth-error" id="authError"></p>
     </div>
   </div>
@@ -100,7 +101,7 @@
   <!-- Модальное окно -->
   <div class="modal-backdrop" id="modal">
     <div class="modal" role="dialog" aria-modal="true" aria-label="Запись сна">
-      <h2>Запись сна</h2>
+      <h2 id="modalTitle">Запись сна</h2>
 
       <label class="field">
         <span>Отход ко сну</span>

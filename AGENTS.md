@@ -11,7 +11,7 @@ Always answer in Russian.
 - Static PWA frontend (root): `index.html`, `css/main.css`, `js/script.js`, `manifest.webmanifest`, `sw.js`, `icons/`.
 - Apps Script backend (`apps-script/`): `Code.gs` (JSON API), `appsscript.json` (manifest/scopes), `Migrate.gs` (one-time import of old data — delete after use).
 
-Flow: frontend obtains a Google OAuth **access token** (GIS `initTokenClient`), sends it as `Authorization: Bearer <token>` to `SCRIPT_URL` via `fetch` POST with JSON body `{ action: 'getEntries' | 'add' | 'delete', ... }`. Backend runs as the accessing user (`executeAs: USER_ACCESSING`), so `Session.getActiveUser()` + `PropertiesService.getUserProperties()` give per-user isolation; `getSheet_` creates each user's sheet in their own Drive.
+Flow: frontend obtains a Google OAuth **access token** (GIS `initTokenClient`), sends it as `Authorization: Bearer <token>` to `SCRIPT_URL` via `fetch` POST with JSON body `{ action: 'getEntries' | 'add' | 'update' | 'delete', ... }`. Backend runs as the accessing user (`executeAs: USER_ACCESSING`), so `Session.getActiveUser()` + `PropertiesService.getUserProperties()` give per-user isolation; `getSheet_` creates each user's sheet in their own Drive.
 
 ## No tooling
 

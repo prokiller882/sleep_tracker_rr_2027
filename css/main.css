@@ -320,6 +320,29 @@ ul#list {
     background: var(--danger-soft);
 }
 
+.entry-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.edit {
+    background: none;
+    border: none;
+    color: var(--muted);
+    display: inline-flex;
+    align-items: center;
+    padding: var(--space-1) var(--space-2);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: color .15s, background .15s;
+}
+
+.edit:hover {
+    color: var(--accent-text);
+    background: var(--surface-hover);
+}
+
 .entry-times {
     display: flex;
     align-items: center;
@@ -590,6 +613,11 @@ textarea {
 .auth-card .auth-error {
     color: var(--danger);
     font-size: var(--text-sm);
+    margin: var(--space-3) 0 0;
+}
+
+.auth-card .auth-note {
+    font-size: var(--text-xs);
     margin: var(--space-3) 0 0;
 }
 
