@@ -1,0 +1,14 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Node / tooling
+node_modules/
+npm-debug.log*
+
+# unslop-design artifacts
+.unslop/
+
+# local env
+.env
+.env.*
