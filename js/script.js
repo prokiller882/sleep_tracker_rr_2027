@@ -1,21 +1,98 @@
 /* ============================================================
-   ТРЕКЕР СНА — ФРОНТЕНД (с графиком)
-   Работает с Google Таблицей через Apps Script.
+   ТРЕКЕР СНА — ФРОНТЕНД (статичный PWA)
+   Общается с Apps Script (JSON API) через OAuth-токен.
+   Данные хранятся в личной таблице текущего пользователя.
    ============================================================ */
 
 (function () {
   'use strict';
 
   /* ================== НАСТРОЙКИ ================== */
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxV4p7X2WS2OpcFcsqvi1bRacMgcy2PIbVpmw2A3GEKk9vbg2OVaFQBfYICgvtPL1s2/exec'; // ⚠️ ВСТАВЬТЕ СВОЙ URL
-  const SECRET_KEY = 'MY_SUPER_SECRET_123stanislo322'; // ⚠️ ДОЛЖЕН СОВПАДАТЬ С Code.gs
-
+  // ⚠️ ВСТАВЬТЕ СВОИ ЗНАЧЕНИЯ:
+  const SCRIPT_URL = 'https://script.google.com/macros/s/PASTE_YOUR_SCRIPT_ID/exec';
+  const CLIENT_ID = 'PASTE_YOUR_CLIENT_ID.apps.googleusercontent.com';
+  const SCOPES = [
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/drive.file',
+    'https://www.googleapis.com/auth/userinfo.email'
+  ].join(' ');
 
   const CACHE_KEY = 'sleep-tracker-cache-v2';
   const MOODS       = ['', 'Ужасно', 'Плохо', 'Нормально', 'Хорошо', 'Отлично'];
   const MOOD_EMOJI  = ['', '😵', '😕', '😐', '🙂', '🤩'];
   const DAY_MS      = 86400000;
   const CHART_DAYS  = 7;
+
+  /* ================== GOOGLE AUTH ================== */
+  let tokenClient = null;
+  let accessToken = null;
+  let authResolve = null;
+
+  function initAuth() {
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: SCOPES,
+      callback: (resp) => {
+        if (resp && resp.error !== undefined) {
+          const err = new Error(resp.error_description || resp.error || 'Ошибка входа');
+          if (authResolve) { authResolve.reject(err); authResolve = null; }
+          return;
+        }
+        accessToken = resp.access_token;
+        if (authResolve) { authResolve.resolve(accessToken); authResolve = null; }
+      }
+    });
+  }
+
+  function requestToken() {
+    if (accessToken) return Promise.resolve(accessToken);
+    return new Promise((resolve, reject) => {
+      authResolve = { resolve, reject };
+      tokenClient.requestAccessToken();
+    });
+  }
+
+  // Ждём, пока загрузится скрипт Google Identity Services.
+  function ensureGsi(cb) {
+    if (window.google && google.accounts && google.accounts.oauth2) { cb(); return; }
+    setTimeout(() => ensureGsi(cb), 100);
+  }
+
+  /* ================== СЕРВЕРНЫЙ API ================== */
+  async function api(action, payload) {
+    const token = await requestToken();
+    const res = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'text/plain;charset=utf-8'
+      },
+      body: JSON.stringify(Object.assign({ action: action }, payload || {}))
+    });
+
+    if (res.status === 401 || res.status === 403) {
+      accessToken = null;
+      showAuth();
+      throw new Error('Требуется повторный вход');
+    }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+
+    const data = await res.json();
+    if (data.result !== 'success') throw new Error(data.error || 'Ошибка сервера');
+    return data;
+  }
+
+  const server = {
+    getEntries() {
+      return api('getEntries').then((d) => ({ entries: d.entries || [], email: d.email || '' }));
+    },
+    addEntry(bed, wake, quality, note) {
+      return api('add', { bed, wake, quality, note }).then((d) => d.entry);
+    },
+    deleteEntry(id) {
+      return api('delete', { id });
+    }
+  };
 
   /* ================== СОСТОЯНИЕ ================== */
   let state = {
@@ -31,6 +108,9 @@
   const $ = (sel) => document.querySelector(sel);
 
   const el = {
+    auth:       $('#auth'),
+    btnLogin:   $('#btnLogin'),
+    authError:  $('#authError'),
     bigTime:    $('#bigTime'),
     bigLabel:   $('#bigLabel'),
     btnSleep:   $('#btnSleep'),
@@ -51,7 +131,8 @@
     btnCancel:  $('#btnCancel'),
     btnSave:    $('#btnSave'),
     toast:      $('#toast'),
-    chart:      $('#chart') // NEW
+    chart:      $('#chart'),
+    account:    $('#account')
   };
 
   /* ================== УТИЛИТЫ ================== */
@@ -101,10 +182,13 @@
     toastTimer = setTimeout(() => el.toast.classList.remove('show'), 2200);
   }
 
+  function showAuth() { el.auth.hidden = false; }
+  function hideAuth() { el.auth.hidden = true; }
+
   /* ================== ЦВЕТА ДЛЯ ГРАФИКА ================== */
   function qualityColor(q) {
     const colors = {
-      0: 'rgba(124,108,246,.45)', // без оценки — приглушённый фиолетовый
+      0: 'rgba(124,108,246,.45)',
       1: '#ff6b6b',
       2: '#ffa94d',
       3: '#ffd43b',
@@ -136,46 +220,24 @@
     } catch (err) { /* ignore */ }
   }
 
-  /* ================== СЕРВЕРНЫЙ API ================== */
-  async function apiGet() {
-    const url = `${SCRIPT_URL}?key=${encodeURIComponent(SECRET_KEY)}`;
-    const res = await fetch(url, { method: 'GET' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-    if (data.result !== 'success') throw new Error(data.error || 'Server error');
-    return data.entries || [];
-  }
-
-  async function apiPost(payload) {
-    payload.key = SECRET_KEY;
-    const res = await fetch(SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload)
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-    if (data.result !== 'success') throw new Error(data.error || 'Server error');
-    return data;
-  }
-
   /* ================== СИНХРОНИЗАЦИЯ ================== */
   async function syncFromServer(showToast) {
     if (isLoading) return;
     isLoading = true;
 
     try {
-      const entries = await apiGet();
-      state.entries = entries;
+      const data = await server.getEntries();
+      state.entries = data.entries;
       state.online = true;
       saveCache();
       render();
+      el.account.textContent = data.email ? 'Аккаунт: ' + data.email : '';
       if (showToast) toast('Данные обновлены');
     } catch (err) {
       console.error('Ошибка загрузки:', err);
       state.online = false;
       render();
-      if (showToast) toast('Нет связи с сервером — показан кэш');
+      if (showToast) toast('Не удалось обновить данные — показан кэш');
     } finally {
       isLoading = false;
     }
@@ -220,11 +282,10 @@
     el.statMood.textContent = avgMood.toFixed(1) + ' ' + (MOOD_EMOJI[Math.round(avgMood)] || '');
   }
 
-  /* ================== ОТРИСОВКА: ГРАФИК (NEW) ================== */
+  /* ================== ОТРИСОВКА: ГРАФИК ================== */
   function renderChart() {
     if (!el.chart) return;
 
-    // 1. Строим 7 слотов: от 6 дней назад до сегодня
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -233,7 +294,6 @@
       const dayStart = new Date(today.getTime() - i * DAY_MS);
       const dayEnd = new Date(dayStart.getTime() + DAY_MS);
 
-      // Ищем запись, у которой пробуждение попадает в этот день
       const entry = state.entries.find((e) => {
         const wake = new Date(e.wake);
         return wake >= dayStart && wake < dayEnd;
@@ -242,7 +302,6 @@
       slots.push({ date: dayStart, entry: entry || null });
     }
 
-    // 2. Размеры виртуального холста SVG
     const W = 340;
     const H = 160;
     const padTop = 24;
@@ -256,15 +315,12 @@
     const gap = n > 5 ? 6 : 10;
     const barW = (chartW - gap * (n - 1)) / n;
 
-    // 3. Масштаб: округляем максимум до чётного числа часов, но не меньше 8
     const hoursArr = slots.map((s) => (s.entry ? entryDuration(s.entry) / 3600000 : 0));
     const maxHours = Math.max.apply(null, hoursArr.concat([8]));
     const scaleMax = Math.max(8, Math.ceil(maxHours / 2) * 2);
 
-    // 4. Начинаем собирать SVG
     let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="График сна за 7 дней">`;
 
-    // Опорные горизонтальные линии (4ч, 8ч, 12ч)
     [4, 8, 12].forEach((refH) => {
       if (refH > scaleMax) return;
       const y = padTop + chartH - (refH / scaleMax) * chartH;
@@ -272,11 +328,9 @@
       svg += `<text x="${W - padRight - 2}" y="${y - 3}" text-anchor="end" font-size="8" fill="rgba(255,255,255,.22)">${refH}ч</text>`;
     });
 
-    // Базисная линия
     const baseY = padTop + chartH;
     svg += `<line x1="${padLeft}" y1="${baseY}" x2="${W - padRight}" y2="${baseY}" stroke="rgba(255,255,255,.1)" stroke-width="1"/>`;
 
-    // Столбики и подписи
     slots.forEach((slot, i) => {
       const x = padLeft + i * (barW + gap);
       const cx = x + barW / 2;
@@ -287,24 +341,17 @@
         const y = baseY - barH;
         const q = Number(slot.entry.quality) || 0;
 
-        // Столбик
         svg += `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" rx="4" ry="4" fill="${qualityColor(q)}"/>`;
-
-        // Значение над столбиком
-        const hLabel = h >= 10 ? h.toFixed(1) : h.toFixed(1);
-        svg += `<text x="${cx}" y="${y - 6}" text-anchor="middle" font-size="9" font-weight="600" fill="#c9cfe4">${hLabel}</text>`;
+        svg += `<text x="${cx}" y="${y - 6}" text-anchor="middle" font-size="9" font-weight="600" fill="#c9cfe4">${h.toFixed(1)}</text>`;
       } else {
-        // Пустой день — маленькая плашка на базовой линии
         svg += `<rect x="${x}" y="${baseY - 3}" width="${barW}" height="3" rx="1.5" fill="rgba(255,255,255,.08)"/>`;
       }
 
-      // Подпись с числом дня
       const dayNum = slot.date.getDate();
       svg += `<text x="${cx}" y="${H - 10}" text-anchor="middle" font-size="9.5" fill="#8b93b0">${dayNum}</text>`;
     });
 
     svg += `</svg>`;
-
     el.chart.innerHTML = svg;
   }
 
@@ -341,7 +388,7 @@
   function render() {
     renderQuick();
     renderStats();
-    renderChart(); // NEW
+    renderChart();
     renderList();
   }
 
@@ -405,22 +452,14 @@
     el.btnSave.textContent = 'Сохранение…';
 
     try {
-      const result = await apiPost({
-        action: 'add',
-        bed: bedDate.toISOString(),
-        wake: wakeDate.toISOString(),
-        quality: editingQuality,
-        note: el.fNote.value.trim()
-      });
+      const entry = await server.addEntry(
+        bedDate.toISOString(),
+        wakeDate.toISOString(),
+        editingQuality,
+        el.fNote.value.trim()
+      );
 
-      state.entries.push({
-        id: result.id,
-        bed: bedDate.toISOString(),
-        wake: wakeDate.toISOString(),
-        quality: editingQuality,
-        note: el.fNote.value.trim()
-      });
-
+      state.entries.push(entry);
       state.pending = null;
       saveCache();
       render();
@@ -428,7 +467,7 @@
       toast('Запись сохранена ✨');
     } catch (err) {
       console.error(err);
-      toast('Ошибка сохранения: ' + err.message);
+      toast('Ошибка сохранения: ' + (err && err.message ? err.message : err));
     } finally {
       el.btnSave.disabled = false;
       el.btnSave.textContent = 'Сохранить';
@@ -444,18 +483,30 @@
     render();
 
     try {
-      await apiPost({ action: 'delete', id: id });
+      await server.deleteEntry(id);
       saveCache();
       toast('Запись удалена');
     } catch (err) {
       console.error(err);
       state.entries = backup;
       render();
-      toast('Не удалось удалить: ' + err.message);
+      toast('Не удалось удалить: ' + (err && err.message ? err.message : err));
     }
   }
 
   /* ================== СОБЫТИЯ ================== */
+  el.btnLogin.addEventListener('click', () => {
+    el.authError.textContent = '';
+    requestToken()
+      .then(() => {
+        hideAuth();
+        syncFromServer(false);
+      })
+      .catch((err) => {
+        el.authError.textContent = 'Не удалось войти: ' + (err && err.message ? err.message : err);
+      });
+  });
+
   el.btnSleep.addEventListener('click', () => {
     state.pending = new Date().toISOString();
     saveCache();
@@ -505,7 +556,7 @@
 
   // Синхронизация при возврате на вкладку
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) {
+    if (!document.hidden && accessToken) {
       render();
       syncFromServer(false);
     }
@@ -514,5 +565,9 @@
   /* ================== СТАРТ ================== */
   loadCache();
   render();
-  syncFromServer(false);
+  ensureGsi(initAuth);
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  }
 })();

@@ -1,32 +1,63 @@
 /* ============================================================
-   ТРЕКЕР СНА — СЕРВЕР (Google Apps Script · HTMLService)
+   ТРЕКЕР СНА — БЭКЕНД (Google Apps Script · JSON API)
    Многопользовательский режим: каждый пользователь пишет
    в СВОЮ таблицу в СВОЁМ Google Drive.
+
+   Фронтенд (статичный PWA) шлёт POST-запросы с заголовком
+     Authorization: Bearer <OAuth access token>
+   и JSON-телом:
+     { action: 'getEntries' | 'add' | 'delete', ... }
 
    ⚙️ Деплой веб-приложения (обязательно):
      1. «Выполнять от: пользователя, открывшего веб-приложение»
      2. «Доступ: все, у кого есть Google-аккаунт»
 
-   🔐 Требуемые скоупы (указать в appsscript.json):
+   🔐 Скоупы (appsscript.json):
        https://www.googleapis.com/auth/spreadsheets
        https://www.googleapis.com/auth/drive.file
+       https://www.googleapis.com/auth/userinfo.email
    ============================================================ */
 
 const SHEET_NAME = 'Записи';
 const HEADERS = ['ID', 'Bed', 'Wake', 'Quality', 'Note'];
 const MAX_NOTE = 500;
 
-/* ---------- Веб-интерфейс ---------- */
+/* ---------- HTTP API ---------- */
 
 function doGet() {
-  return HtmlService.createHtmlOutputFromFile('Index')
-    .setTitle('Трекер сна')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover');
+  return json_({ result: 'success', ok: true, email: getUserEmail() });
 }
 
-// Подключение CSS/JS внутрь Index.html: <?!= include('Css'); ?>
-function include(filename) {
-  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+function doPost(e) {
+  let payload = {};
+  try {
+    payload = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+  } catch (err) {
+    return json_({ result: 'error', error: 'Некорректный JSON' });
+  }
+
+  const action = payload.action;
+  try {
+    if (action === 'getEntries') {
+      return json_({ result: 'success', email: getUserEmail(), entries: getEntries() });
+    }
+    if (action === 'add') {
+      const entry = addEntry(payload.bed, payload.wake, payload.quality, payload.note);
+      return json_({ result: 'success', entry: entry });
+    }
+    if (action === 'delete') {
+      deleteEntry(payload.id);
+      return json_({ result: 'success' });
+    }
+    return json_({ result: 'error', error: 'Неизвестное действие: ' + action });
+  } catch (err) {
+    return json_({ result: 'error', error: err.message || String(err) });
+  }
+}
+
+function json_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 /* ---------- Текущий пользователь ---------- */
@@ -72,7 +103,7 @@ function writeHeaders_(sheet) {
   sheet.setFrozenRows(1);
 }
 
-/* ---------- Данные (вызываются с клиента через google.script.run) ---------- */
+/* ---------- Данные ---------- */
 
 function getEntries() {
   const sheet = getSheet_();
@@ -100,7 +131,7 @@ function addEntry(bed, wake, quality, note) {
   const id = Utilities.getUuid();
   appendEntry_(getSheet_(), id, bedIso, wakeIso, q, text);
 
-  return { id, bed: bedIso, wake: wakeIso, quality: q, note: text };
+  return { id: id, bed: bedIso, wake: wakeIso, quality: q, note: text };
 }
 
 function deleteEntry(id) {
