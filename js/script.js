@@ -103,6 +103,7 @@
 
   let editingQuality = 3;
   let isLoading = false;
+  let showAll = false;
 
   /* ================== DOM ================== */
   const $ = (sel) => document.querySelector(sel);
@@ -122,6 +123,7 @@
     list:       $('#list'),
     empty:      $('#empty'),
     btnAdd:     $('#btnAdd'),
+    btnMore:    $('#btnMore'),
     modal:      $('#modal'),
     fBed:       $('#fBed'),
     fWake:      $('#fWake'),
@@ -361,7 +363,9 @@
 
     el.empty.style.display = entries.length ? 'none' : 'block';
 
-    el.list.innerHTML = entries.map((e) => {
+    const visible = showAll ? entries : entries.slice(0, 5);
+
+    el.list.innerHTML = visible.map((e) => {
       const q = Number(e.quality) || 0;
       return `
         <li class="entry">
@@ -382,6 +386,14 @@
           ${e.note ? `<p class="entry-note">${esc(e.note)}</p>` : ''}
         </li>`;
     }).join('');
+
+    const hiddenCount = entries.length - visible.length;
+    if (hiddenCount > 0) {
+      el.btnMore.hidden = false;
+      el.btnMore.textContent = showAll ? 'Свернуть' : `Показать все (ещё ${hiddenCount})`;
+    } else {
+      el.btnMore.hidden = true;
+    }
   }
 
   /* ================== ОБЩАЯ ОТРИСОВКА ================== */
@@ -526,6 +538,10 @@
   });
 
   el.btnAdd.addEventListener('click', () => openModal());
+  el.btnMore.addEventListener('click', () => {
+    showAll = !showAll;
+    renderList();
+  });
   el.btnCancel.addEventListener('click', closeModal);
   el.btnSave.addEventListener('click', saveEntry);
 
