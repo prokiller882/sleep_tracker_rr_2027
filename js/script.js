@@ -9,8 +9,8 @@
 
   /* ================== НАСТРОЙКИ ================== */
   // ⚠️ ВСТАВЬТЕ СВОИ ЗНАЧЕНИЯ:
-  const SCRIPT_URL = 'https://script.google.com/macros/s/PASTE_YOUR_SCRIPT_ID/exec';
-  const CLIENT_ID = 'PASTE_YOUR_CLIENT_ID.apps.googleusercontent.com';
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx7fkzHwTTo2WkhHBemPSHE6RqGv7Lh9Q6xvqsD5wU1PFCaa3FEcRBAEsriImyWiyi8/exec';
+  const CLIENT_ID = '239642448288-jtm3s7juor4469pfccbgklhhmj3lagsd.apps.googleusercontent.com';
   const SCOPES = [
     'https://www.googleapis.com/auth/spreadsheets',
     'https://www.googleapis.com/auth/drive.file',
