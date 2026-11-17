@@ -188,12 +188,12 @@
   /* ================== ЦВЕТА ДЛЯ ГРАФИКА ================== */
   function qualityColor(q) {
     const colors = {
-      0: 'rgba(124,108,246,.45)',
-      1: '#ff6b6b',
-      2: '#ffa94d',
-      3: '#ffd43b',
-      4: '#8ce99a',
-      5: '#51cf66'
+      0: '#30363d',
+      1: '#f85149',
+      2: '#db6d28',
+      3: '#d29922',
+      4: '#3fb950',
+      5: '#56d364'
     };
     return colors[q] || colors[0];
   }
@@ -324,12 +324,12 @@
     [4, 8, 12].forEach((refH) => {
       if (refH > scaleMax) return;
       const y = padTop + chartH - (refH / scaleMax) * chartH;
-      svg += `<line x1="${padLeft}" y1="${y}" x2="${W - padRight}" y2="${y}" stroke="rgba(255,255,255,.06)" stroke-width="1" stroke-dasharray="2 4"/>`;
-      svg += `<text x="${W - padRight - 2}" y="${y - 3}" text-anchor="end" font-size="8" fill="rgba(255,255,255,.22)">${refH}ч</text>`;
+      svg += `<line x1="${padLeft}" y1="${y}" x2="${W - padRight}" y2="${y}" stroke="rgba(139,148,158,.14)" stroke-width="1" stroke-dasharray="2 4"/>`;
+      svg += `<text x="${W - padRight - 2}" y="${y - 3}" text-anchor="end" font-size="8" fill="#8b949e">${refH}ч</text>`;
     });
 
     const baseY = padTop + chartH;
-    svg += `<line x1="${padLeft}" y1="${baseY}" x2="${W - padRight}" y2="${baseY}" stroke="rgba(255,255,255,.1)" stroke-width="1"/>`;
+    svg += `<line x1="${padLeft}" y1="${baseY}" x2="${W - padRight}" y2="${baseY}" stroke="#2a3038" stroke-width="1"/>`;
 
     slots.forEach((slot, i) => {
       const x = padLeft + i * (barW + gap);
@@ -342,13 +342,13 @@
         const q = Number(slot.entry.quality) || 0;
 
         svg += `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" rx="4" ry="4" fill="${qualityColor(q)}"/>`;
-        svg += `<text x="${cx}" y="${y - 6}" text-anchor="middle" font-size="9" font-weight="600" fill="#c9cfe4">${h.toFixed(1)}</text>`;
+        svg += `<text x="${cx}" y="${y - 6}" text-anchor="middle" font-size="9" font-weight="600" fill="#c9d1d9">${h.toFixed(1)}</text>`;
       } else {
-        svg += `<rect x="${x}" y="${baseY - 3}" width="${barW}" height="3" rx="1.5" fill="rgba(255,255,255,.08)"/>`;
+        svg += `<rect x="${x}" y="${baseY - 3}" width="${barW}" height="3" rx="1.5" fill="#30363d"/>`;
       }
 
       const dayNum = slot.date.getDate();
-      svg += `<text x="${cx}" y="${H - 10}" text-anchor="middle" font-size="9.5" fill="#8b93b0">${dayNum}</text>`;
+      svg += `<text x="${cx}" y="${H - 10}" text-anchor="middle" font-size="9.5" fill="#8b949e">${dayNum}</text>`;
     });
 
     svg += `</svg>`;
@@ -464,7 +464,7 @@
       saveCache();
       render();
       closeModal();
-      toast('Запись сохранена ✨');
+      toast('Запись сохранена');
     } catch (err) {
       console.error(err);
       toast('Ошибка сохранения: ' + (err && err.message ? err.message : err));
@@ -511,7 +511,7 @@
     state.pending = new Date().toISOString();
     saveCache();
     renderQuick();
-    toast('Спокойной ночи 🌙');
+    toast('Спокойной ночи');
   });
 
   el.btnWake.addEventListener('click', () => {
